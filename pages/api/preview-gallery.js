@@ -6,22 +6,27 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { url } = req.body;
+  const { url, galleryUrl } = req.body;
 
-  console.log('Received URL:', url);
+  // Støtt både 'url' og 'galleryUrl' for bakoverkompatibilitet
+  const targetUrl = url || galleryUrl;
 
-  if (!url) {
+  console.log('Received URL:', targetUrl);
+  console.log('Request body:', req.body);
+
+  if (!targetUrl) {
     return res.status(400).json({ 
       error: 'No URL provided',
-      received: req.body 
+      received: req.body,
+      expected: 'url or galleryUrl field'
     });
   }
 
   // Aksepter alle URLs som starter med http/https
-  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+  if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
     return res.status(400).json({ 
       error: 'Invalid URL format',
-      url: url,
+      url: targetUrl,
       hint: 'URL must start with http:// or https://' 
     });
   }
@@ -32,7 +37,7 @@ export default async function handler(req, res) {
   if (!browserlessApiKey) {
     console.error('BROWSERLESS_API_KEY not set');
     // Fallback til cheerio hvis ingen Browserless key
-    return handleWithCheerio(url, res);
+    return handleWithCheerio(targetUrl, res);
   }
 
   let browser = null;
@@ -52,7 +57,7 @@ export default async function handler(req, res) {
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
 
     // Naviger til siden med timeout
-    await page.goto(url, { 
+    await page.goto(targetUrl, { 
       waitUntil: 'networkidle2',
       timeout: 30000 
     });
@@ -63,7 +68,7 @@ export default async function handler(req, res) {
     }).catch(() => console.log('No images found with selector'));
 
     // Spesifikk håndtering for pholio.no
-    if (url.includes('pholio.no')) {
+    if (targetUrl.includes('pholio.no')) {
       // Pholio kan kreve ekstra venting eller klikk
       await page.waitForTimeout(2000);
     }
@@ -140,7 +145,7 @@ export default async function handler(req, res) {
         address: address || 'Adresse ikke funnet',
         imageCount: images.length
       };
-    }, url);
+    }, targetUrl);
 
     await browser.close();
 
@@ -148,7 +153,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ...data,
-      url,
+      url: targetUrl,
       source: 'browserless'
     });
 
@@ -160,7 +165,7 @@ export default async function handler(req, res) {
     }
 
     // Fallback til cheerio hvis Browserless feiler
-    return handleWithCheerio(url, res);
+    return handleWithCheerio(targetUrl, res);
   }
 }
 
