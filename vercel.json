@@ -2,9 +2,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "framework": "nextjs",
-  "env": {
-    "OPENAI_API_KEY": "@openai_api_key"
-  },
+
   "functions": {
     "pages/api/analyze.js": {
       "maxDuration": 60

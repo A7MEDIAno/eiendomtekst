@@ -1,232 +1,183 @@
-// ===== FILE: pages/api/preview-gallery.js - KOMPLETT OPPDATERT =====
-import { chromium } from 'playwright';
+// pages/api/preview-gallery.js
+import puppeteer from 'puppeteer-core';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { galleryUrl } = req.body;
+  const { url } = req.body;
 
-  if (!galleryUrl) {
-    return res.status(400).json({ error: 'Mangler galleri-URL' });
+  if (!url || !url.includes('finn.no')) {
+    return res.status(400).json({ error: 'Invalid Finn.no URL' });
   }
 
-  let browser;
+  // Browserless API key - hent fra environment variable
+  const browserlessApiKey = process.env.BROWSERLESS_API_KEY;
   
+  if (!browserlessApiKey) {
+    console.error('BROWSERLESS_API_KEY not set');
+    // Fallback til cheerio hvis ingen Browserless key
+    return handleWithCheerio(url, res);
+  }
+
+  let browser = null;
+
   try {
-    console.log('Fetching preview for:', galleryUrl);
+    console.log('Connecting to Browserless...');
     
-    // Launch browser
-    browser = await Promise.race([
-      chromium.launch({ 
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Browser launch timeout')), 10000))
-    ]);
-    
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      viewport: { width: 1920, height: 1080 }
+    // Koble til Browserless
+    browser = await puppeteer.connect({
+      browserWSEndpoint: `wss://chrome.browserless.io?token=${browserlessApiKey}`,
     });
+
+    const page = await browser.newPage();
     
-    const page = await context.newPage();
-    
-    // Navigate to gallery
-    await page.goto(galleryUrl, { 
-      waitUntil: 'domcontentloaded',
+    // Sett viewport og user agent
+    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+
+    // Naviger til siden med timeout
+    await page.goto(url, { 
+      waitUntil: 'networkidle2',
       timeout: 20000 
     });
-    
-    // Wait for content
-    await page.waitForTimeout(2000);
 
-    // Extract address if possible
-    const addressInfo = await page.evaluate(() => {
-      const title = document.title;
-      const h1 = document.querySelector('h1')?.textContent;
-      const h2 = document.querySelector('h2')?.textContent;
+    // Vent på at bilder lastes
+    await page.waitForSelector('img[src*="finncdn.no"], img[data-src*="finncdn.no"]', {
+      timeout: 10000
+    }).catch(() => console.log('No images found with selector'));
+
+    // Ekstraher data
+    const data = await page.evaluate(() => {
+      const images = [];
       
-      // Try multiple selectors for Pholio galleries
+      // Finn alle bilder
+      document.querySelectorAll('img').forEach(img => {
+        const src = img.getAttribute('data-src') || img.getAttribute('src');
+        if (src && src.includes('finncdn.no')) {
+          // Konverter til høy oppløsning
+          const highResSrc = src.replace(/\d+x\d+/, '1600x1200');
+          images.push(highResSrc);
+        }
+      });
+
+      // Finn tittel
+      const titleElement = document.querySelector('h1');
+      const title = titleElement ? titleElement.textContent.trim() : 
+                   document.title.split('|')[0].trim();
+
+      // Finn adresse - prøv flere metoder
       let address = '';
       
-      // Check different possible locations
-      const possibleSelectors = [
-        'h1',
-        'h2', 
-        '.property-address',
-        '.gallery-title',
-        '[class*="address"]',
-        '[class*="title"]'
-      ];
-      
-      for (const selector of possibleSelectors) {
-        const element = document.querySelector(selector);
-        if (element && element.textContent) {
-          const text = element.textContent.trim();
-          // Skip if it's just "Pholio" or similar
-          if (text && text.length > 10 && !text.match(/^pholio$/i)) {
-            address = text;
+      // Metode 1: Fra structured data
+      const ldJsonScripts = document.querySelectorAll('script[type="application/ld+json"]');
+      for (const script of ldJsonScripts) {
+        try {
+          const data = JSON.parse(script.textContent);
+          if (data.address) {
+            address = [
+              data.address.streetAddress,
+              data.address.postalCode,
+              data.address.addressLocality
+            ].filter(Boolean).join(' ');
             break;
           }
-        }
+        } catch (e) {}
       }
-      
-      // Fallback to title if nothing found
+
+      // Metode 2: Fra DOM elementer
       if (!address) {
-        address = title || '';
-      }
-      
-      console.log('Raw address found:', address);
-      
-      // Clean the address - remove common UI elements
-      address = address.replace(/^\d+\s*-\s*/, ''); // Remove number prefix like "300781 -"
-      address = address.replace(/\s*\|.*$/, ''); // Remove everything after |
-      address = address.replace(/\s*-\s*Pholio.*$/i, ''); // Remove Pholio suffix
-      address = address.replace(/^Pholio\s*-\s*/i, ''); // Remove Pholio prefix
-      
-      // Remove common UI button texts
-      address = address.replace(/\s*SE BILDENE\s*/gi, '');
-      address = address.replace(/\s*VIS MER\s*/gi, '');
-      address = address.replace(/\s*LES MER\s*/gi, '');
-      address = address.replace(/\s*SE ALLE\s*/gi, '');
-      address = address.replace(/\s*KONTAKT.*$/i, ''); // Remove "KONTAKT MEGLER" etc
-      address = address.replace(/\s*BOOK.*$/i, ''); // Remove "BOOK VISNING" etc
-      
-      address = address.trim();
-      
-      console.log('Cleaned address:', address);
-      
-      return address;
-    });
-
-    // Collect images
-    const images = await page.evaluate(async () => {
-      const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-      const foundImages = new Set();
-      
-      const collectImages = () => {
-        // Regular img tags
-        document.querySelectorAll('img').forEach(img => {
-          const srcs = [
-            img.src,
-            img.getAttribute('src'),
-            img.dataset?.src,
-            img.dataset?.lazySrc,
-            img.dataset?.original,
-            img.getAttribute('data-src'),
-            img.getAttribute('data-lazy-src'),
-            img.getAttribute('data-original')
-          ].filter(Boolean);
-          
-          srcs.forEach(src => {
-            if (src && src.startsWith('http')) {
-              // Filter out small images and icons
-              if (!src.includes('logo') && 
-                  !src.includes('icon') && 
-                  !src.includes('pixel') &&
-                  !src.includes('tracking') &&
-                  !src.includes('1x1')) {
-                foundImages.add(src);
-              }
-            }
-          });
-        });
-        
-        // Background images
-        document.querySelectorAll('[style*="background-image"]').forEach(el => {
-          const style = el.getAttribute('style') || '';
-          const matches = style.matchAll(/url\(['"]?([^'"]+)['"]?\)/g);
-          for (const match of matches) {
-            if (match[1] && match[1].startsWith('http')) {
-              foundImages.add(match[1]);
-            }
-          }
-        });
-        
-        // Picture elements
-        document.querySelectorAll('picture source').forEach(source => {
-          const srcset = source.getAttribute('srcset');
-          if (srcset) {
-            // Extract URLs from srcset
-            const urls = srcset.split(',').map(s => s.trim().split(' ')[0]);
-            urls.forEach(url => {
-              if (url && url.startsWith('http')) {
-                foundImages.add(url);
-              }
-            });
-          }
-        });
-      };
-
-      // Initial collection
-      collectImages();
-      console.log(`Initial collection: ${foundImages.size} images`);
-      
-      // Scroll to trigger lazy loading
-      const scrollHeight = document.body.scrollHeight;
-      const scrollStep = Math.floor(scrollHeight / 5);
-      
-      for (let i = 0; i < 5; i++) {
-        window.scrollTo(0, scrollStep * i);
-        await wait(800);
-        collectImages();
-        console.log(`After scroll ${i + 1}: ${foundImages.size} images`);
-      }
-      
-      // Scroll to bottom
-      window.scrollTo(0, document.body.scrollHeight);
-      await wait(1000);
-      collectImages();
-      
-      console.log(`Final collection: ${foundImages.size} images`);
-      return Array.from(foundImages);
-    });
-
-    // Close browser
-    await context.close();
-    await browser.close();
-    browser = null;
-
-    // Filter and limit images
-    const validImages = images
-      .filter(src => {
-        try {
-          const url = new URL(src);
-          const path = url.pathname.toLowerCase();
-          return src.length > 50 && 
-                 !path.includes('pixel') &&
-                 !path.includes('avatar');
-        } catch (e) {
-          return false;
+        const addressElement = document.querySelector('[data-testid="address"]') ||
+                              document.querySelector('.u-t3') ||
+                              document.querySelector('[class*="address"]');
+        if (addressElement) {
+          address = addressElement.textContent.trim();
         }
-      })
-      .slice(0, 20); // Return max 20 for preview
+      }
 
-    console.log(`Found ${validImages.length} images for preview`);
+      return {
+        images: [...new Set(images)].slice(0, 20), // Unike bilder, maks 20
+        title,
+        address
+      };
+    });
 
-    // VIKTIG: Returner med 'images' key, ikke 'imageUrls'
-    res.status(200).json({
-      images: validImages,
-      address: addressInfo,
-      totalFound: images.length
+    await browser.close();
+
+    console.log(`Found ${data.images.length} images via Browserless`);
+
+    return res.status(200).json({
+      ...data,
+      url,
+      source: 'browserless'
     });
 
   } catch (error) {
-    console.error('Preview error:', error.message);
+    console.error('Browserless error:', error);
     
     if (browser) {
-      try {
-        await browser.close();
-      } catch (e) {
-        console.error('Failed to close browser');
-      }
+      await browser.close().catch(console.error);
     }
 
-    res.status(500).json({ 
-      error: 'Kunne ikke hente forhåndsvisning',
-      details: error.message
+    // Fallback til cheerio hvis Browserless feiler
+    return handleWithCheerio(url, res);
+  }
+}
+
+// Fallback funksjon med cheerio
+async function handleWithCheerio(url, res) {
+  try {
+    const cheerio = await import('cheerio');
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    const images = [];
+    $('img[src*="finncdn.no"], img[data-src*="finncdn.no"]').each((i, elem) => {
+      if (images.length < 20) {
+        const src = $(elem).attr('data-src') || $(elem).attr('src');
+        if (src) {
+          images.push(src.replace(/\d+x\d+/, '1600x1200'));
+        }
+      }
+    });
+
+    const title = $('h1').first().text().trim() || 
+                  $('title').text().split('|')[0].trim();
+    
+    let address = '';
+    $('script[type="application/ld+json"]').each((i, elem) => {
+      try {
+        const data = JSON.parse($(elem).html());
+        if (data.address) {
+          address = [
+            data.address.streetAddress,
+            data.address.postalCode,
+            data.address.addressLocality
+          ].filter(Boolean).join(' ');
+        }
+      } catch (e) {}
+    });
+
+    return res.status(200).json({
+      images: [...new Set(images)],
+      title,
+      address: address || 'Adresse ikke funnet',
+      url,
+      source: 'cheerio-fallback'
+    });
+  } catch (error) {
+    console.error('Cheerio fallback error:', error);
+    return res.status(500).json({ 
+      error: 'Failed to fetch preview',
+      details: error.message 
     });
   }
 }
@@ -236,5 +187,6 @@ export const config = {
     bodyParser: {
       sizeLimit: '1mb',
     },
+    responseLimit: '4mb',
   },
 };
