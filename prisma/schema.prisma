@@ -1,0 +1,132 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Hovedtabell for rom-eksempler
+model RoomExample {
+  id           Int      @id @default(autoincrement())
+  roomType     String   @db.VarChar(50) // stue, kjøkken, bad, etc.
+  description  String   @db.Text
+  targetGroup  String   @default("standard") @db.VarChar(20) // standard, family, firstTime, investor, senior
+  season       String?  @db.VarChar(20) // summer, winter, spring, autumn
+  quality      String   @default("neutral") @db.VarChar(20) // good, neutral, potential
+  
+  // Metadata
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  usageCount   Int      @default(0) // Tell hvor ofte eksemplet er brukt
+  rating       Float?   // Valgfri rating 1-5
+  
+  // Kategorisering
+  tags         Tag[]
+  features     Feature[]
+  
+  @@index([roomType])
+  @@index([targetGroup])
+  @@index([season])
+}
+
+// Tagger for bedre kategorisering
+model Tag {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  examples  RoomExample[]
+  
+  @@index([name])
+}
+
+// Spesifikke features nevnt i beskrivelsen
+model Feature {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100) // gulvvarme, balkong, peis, etc.
+  category  String   @db.VarChar(50) // comfort, material, technical
+  examples  RoomExample[]
+  
+  @@index([name])
+  @@index([category])
+}
+
+// Fargekombinasjon-eksempler
+model ColorCombination {
+  id            Int      @id @default(autoincrement())
+  roomType      String   @db.VarChar(50)
+  floorColor    String   @db.VarChar(100) // eik, grå laminat, hvite fliser, etc.
+  wallColor     String   @db.VarChar(100) // hvit, beige, grå, etc.
+  description   String   @db.Text // Hvordan kombinasjonen oppleves
+  popularity    Int      @default(0)
+  
+  @@index([roomType])
+}
+
+// Sesongbaserte fraser
+model SeasonalPhrase {
+  id        Int      @id @default(autoincrement())
+  season    String   @db.VarChar(20) // summer, winter, spring, autumn
+  roomType  String   @db.VarChar(50) // stue, terrasse, etc.
+  phrase    String   @db.Text // "Nyt lange sommerkvelder"
+  context   String   @db.VarChar(50) // outdoor, indoor, view
+  
+  @@index([season, roomType])
+}
+
+// AI læring - lagre brukerens egne eksempler
+model UserExample {
+  id           Int      @id @default(autoincrement())
+  userId       String   @db.VarChar(255) // For fremtidig bruker-system
+  roomType     String   @db.VarChar(50)
+  description  String   @db.Text
+  imageUrl     String?  @db.Text
+  style        String?  @db.Text // Analysert skrivestil (JSON som string)
+  
+  createdAt    DateTime @default(now())
+  
+  @@index([userId])
+}
+
+// Kvalitetsfraser database
+model QualityPhrase {
+  id        Int      @id @default(autoincrement())
+  phrase    String   @unique @db.VarChar(500)
+  category  String   @db.VarChar(50) // good, neutral, potential
+  context   String   @db.VarChar(50) // material, condition, feature
+  
+  @@index([category])
+}
+
+// Analyser og statistikk
+model AnalysisLog {
+  id            Int      @id @default(autoincrement())
+  imageUrl      String   @db.Text
+  roomType      String   @db.VarChar(50)
+  targetGroup   String   @db.VarChar(20)
+  description   String   @db.Text
+  cachedResult  Boolean  @default(false)
+  responseTime  Int      // millisekunder
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([createdAt])
+}
+
+// Områdedata cache
+model LocationCache {
+  id            Int      @id @default(autoincrement())
+  address       String   @unique @db.VarChar(500)
+  latitude      Float
+  longitude     Float
+  locationData  String   @db.Text // Full JSON fra API (som string)
+  sunConditions String   @db.Text // Beregnet solforhold (som string)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([address])
+}

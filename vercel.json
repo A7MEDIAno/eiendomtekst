@@ -1,0 +1,22 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "env": {
+    "OPENAI_API_KEY": "@openai_api_key"
+  },
+  "functions": {
+    "pages/api/analyze.js": {
+      "maxDuration": 60
+    },
+    "pages/api/analyze-simple.js": {
+      "maxDuration": 30
+    },
+    "pages/api/generate-intro.js": {
+      "maxDuration": 20
+    },
+    "pages/api/fetch-location-info.js": {
+      "maxDuration": 20
+    }
+  }
+}

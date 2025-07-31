@@ -1,0 +1,58 @@
+{
+  "name": "a7-generate-pro",
+  "version": "5.0.0",
+  "description": "A7 Generate Pro - AI-drevne eiendomsbeskrivelser med wizard mode og avanserte funksjoner",
+  "private": true,
+  "author": "A7 Team",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "export": "next export",
+    "analyze": "ANALYZE=true next build",
+    "db:push": "prisma db push",
+    "db:seed": "node prisma/seed.js",
+    "db:studio": "prisma studio",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:reset": "prisma migrate reset",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.7.0",
+    "axios": "^1.11.0",
+    "cheerio": "^1.1.2",
+    "docx": "^8.5.0",
+    "formidable": "^3.5.4",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.1",
+    "jspdf-autotable": "^5.0.2",
+    "next": "^14.2.30",
+    "node-cache": "^5.1.2",
+    "openai": "^4.20.0",
+    "pdf-parse": "^1.1.1",
+    "playwright": "^1.40.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@next/bundle-analyzer": "^14.0.4",
+    "@types/node": "20.10.0",
+    "@types/react": "18.2.39",
+    "@types/react-dom": "18.2.17",
+    "autoprefixer": "^10.4.21",
+    "eslint": "8.54.0",
+    "eslint-config-next": "14.0.3",
+    "postcss": "^8.5.6",
+    "prisma": "^5.7.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "5.3.2"
+  },
+  "engines": {
+    "node": ">=16.8.0",
+    "npm": ">=8.0.0"
+  }
+}
