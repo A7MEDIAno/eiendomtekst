@@ -1,10 +1,11 @@
-// ===== FILE: pages/index.js - OPPDATERT MED WIZARD MODE =====
+// pages/index.js - OPPDATERT MED SIMPLIFIED WIZARD
 import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { browserCache } from '../lib/cacheUtils';
 import { exportToWord, exportToPDF, downloadFile } from '../lib/exportUtils';
 import { WizardProvider } from '../contexts/WizardContext';
 import WizardContainer from '../components/wizard/WizardContainer';
+import SimplifiedWizard from '../components/SimplifiedWizard'; // NY IMPORT
 
 export default function Home() {
   const [wizardMode, setWizardMode] = useState(false);
@@ -25,14 +26,14 @@ export default function Home() {
 
   if (wizardMode) {
     return (
-      <WizardProvider>
+      <>
         <Head>
-          <title>A7 Generate Pro - Wizard Mode</title>
-          <meta name="description" content="Steg-for-steg AI-drevne eiendomsbeskrivelser" />
+          <title>A7 Generate Pro - Forenklet</title>
+          <meta name="description" content="Alt-i-ett AI-drevne eiendomsbeskrivelser" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
         </Head>
-        <WizardContainer />
-      </WizardProvider>
+        <SimplifiedWizard />
+      </>
     );
   }
 
@@ -537,10 +538,10 @@ function ClassicMode({ toggleWizardMode }) {
               <button
                 onClick={toggleWizardMode}
                 className="bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 px-4 py-2 rounded-lg transition-all flex items-center gap-2"
-                title="Prøv ny wizard-modus"
+                title="Prøv forenklet versjon"
               >
-                <span>🧙‍♂️</span>
-                <span className="text-sm">Prøv Wizard</span>
+                <span>✨</span>
+                <span className="text-sm">Forenklet versjon</span>
               </button>
             </div>
             <p className="text-xl text-gray-300">
