@@ -24,18 +24,18 @@ export default function Home() {
     localStorage.setItem('preferWizardMode', newMode.toString());
   };
 
-  if (wizardMode) {
-    return (
-      <>
-        <Head>
-          <title>A7 Generate Pro - Forenklet</title>
-          <meta name="description" content="Alt-i-ett AI-drevne eiendomsbeskrivelser" />
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-        </Head>
-        <SimplifiedWizard />
-      </>
-    );
-  }
+ if (wizardMode) {
+  return (
+    <>
+      <Head>
+        <title>A7 Generate Pro - Forenklet</title>
+        <meta name="description" content="Alt-i-ett AI-drevne eiendomsbeskrivelser" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Head>
+      <SimplifiedWizard />
+    </>
+  );
+}
 
   // Classic mode continues below...
   return <ClassicMode toggleWizardMode={toggleWizardMode} />;
